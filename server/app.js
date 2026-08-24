@@ -12,23 +12,50 @@ import { ensureDefaultAdmin } from "./src/utils/ensureDefaultAdmin.js";
 
 const app = express();
 
-const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:5173").split(",").map((origin) => origin.trim().replace(/\/$/, "")).filter(Boolean);
+const allowedOrigins = (
+  process.env.CLIENT_ORIGIN || "http://localhost:5173"
+)
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/$/, ""))
+  .filter(Boolean);
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow non-browser requests (like server-to-server or postman)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Blocked by CORS policy: Invalid Origin'));
+    // Allow requests without an Origin header
+    // such as Postman or server-to-server requests
+    if (!origin) {
+      return callback(null, true);
     }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.error("Blocked CORS origin:", origin);
+
+    return callback(
+      new Error("Blocked by CORS policy: Invalid Origin")
+    );
   },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'X-CSRF-Token'],
+
+  methods: [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS",
+  ],
+
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-CSRF-Token",
+  ],
+
   credentials: true,
-  maxAge: 600 // Cache preflight response for 10 minutes
+
+  maxAge: 600,
 };
 
 app.use(helmet());
