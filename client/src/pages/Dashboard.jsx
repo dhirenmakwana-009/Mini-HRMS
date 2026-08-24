@@ -163,7 +163,7 @@ function AnalogClock({ now, status, elapsedSeconds, onPunch }) {
       </div>
 
       {/* punch button (crown) */}
-      <button
+      {/* <button
         onClick={onPunch}
         className={`group absolute bottom-[-14px] flex flex-col items-center gap-1 rounded-full border px-6 py-3 text-xs font-semibold uppercase tracking-wider shadow-lg transition-all duration-200 active:scale-95 ${
           status === "in"
@@ -175,7 +175,7 @@ function AnalogClock({ now, status, elapsedSeconds, onPunch }) {
           {status === "in" ? <LogOut size={15} /> : <LogIn size={15} />}
           {status === "in" ? "Punch Out" : "Punch In"}
         </span>
-      </button>
+      </button> */}
     </div>
   );
 }
