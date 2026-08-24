@@ -3,10 +3,7 @@ Hello Sir/ Ma'am,
 
 **  Here is the .env file for the Client Side,
 
-
 VITE_API_URL=http://localhost:3000/api
-
-
 
 **  Here is the .env file for the Server Side,
 
