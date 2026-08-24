@@ -12,7 +12,7 @@ import { ensureDefaultAdmin } from "./src/utils/ensureDefaultAdmin.js";
 
 const app = express();
 
-const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:5173").split(",");
+const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:5173").split(",").map((origin) => origin.trim().replace(/\/$/, "")).filter(Boolean);
 
 const corsOptions = {
   origin: (origin, callback) => {

@@ -30,8 +30,8 @@ export const requireRole = (...roles) => (req, res, next) => {
 
 export const cookieOptions = (maxAge) => ({
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+  secure: process.env.COOKIE_SECURE === "true" || process.env.NODE_ENV === "production",
+  sameSite: process.env.COOKIE_SAME_SITE || (process.env.NODE_ENV === "production" ? "none" : "lax"),
   ...(maxAge ? { maxAge } : {}),
 });
 
