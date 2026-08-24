@@ -1,5 +1,9 @@
 Hello Sir/ Ma'am,
 
+Live Deployment Link : https://minihrms01.vercel.app/
+
+admin credentials : email - "admin@gmail.com" , password - "admin@123"
+employee credentials : email - "dhiren@gmail.com" , password - "Dhiren@123"
 
 **  Here is the .env file for the Client Side,
 
