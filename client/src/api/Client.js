@@ -1,7 +1,10 @@
 import axios from "axios";
 
 export const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "https://mini-hrms-2.onrender.com/api" : "http://localhost:3000/api"),
+    // Production requests must go through the Vercel /api rewrite. Calling
+    // Render directly makes the auth cookies third-party and browsers can
+    // withhold them, causing every protected request to return 401.
+    baseURL: import.meta.env.PROD ? "/api" : (import.meta.env.VITE_API_URL || "http://localhost:3000/api"),
     timeout: 10000,
     withCredentials: true,
     headers: { "Content-Type": "application/json" },
