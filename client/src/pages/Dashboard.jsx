@@ -11,6 +11,8 @@ import {
   BellRing,
   MapPin,
   ChevronRight,
+  AlertTriangle,
+  X,
 } from "lucide-react";
 import { api } from "../api/Client";
 import { useAuth } from "../hooks/useAuth";
@@ -321,6 +323,7 @@ export default function AttendanceDashboard() {
   const [summary, setSummary] = useState(null);
   const [requestError, setRequestError] = useState("");
   const [isPunching, setIsPunching] = useState(false);
+  const [punchOutPreview, setPunchOutPreview] = useState(null);
   const tickRef = useRef(null);
 
   useEffect(() => {
@@ -328,10 +331,11 @@ export default function AttendanceDashboard() {
     return () => clearInterval(tickRef.current);
   }, []);
 
-  useEffect(() => {
+  const refreshAttendance = useCallback(() => {
     api.get("/attendance/today").then(({ data }) => setAttendance(data.attendance)).catch(() => setRequestError("Unable to load today's attendance."));
     api.get("/attendance/summary").then(({ data }) => setSummary(data.summary)).catch(() => setRequestError("Unable to load attendance summary."));
   }, []);
+  useEffect(() => { refreshAttendance(); const id = setInterval(refreshAttendance, 60000); return () => clearInterval(id); }, [refreshAttendance]);
 
   const status = attendance?.status === "working" ? "in" : "out";
   const punchInAt = status === "in" ? new Date(attendance.sessions.at(-1).punchIn) : null;
@@ -345,11 +349,15 @@ export default function AttendanceDashboard() {
       : accumulatedSeconds;
 
   const handlePunch = useCallback(async () => {
+    if (status === "in") {
+      try { const { data } = await api.post("/attendance/punch-out/preview"); setPunchOutPreview(data); }
+      catch (error) { setRequestError(error.response?.data?.error || "Unable to prepare punch out."); }
+      return;
+    }
     setIsPunching(true);
     setRequestError("");
     try {
-      const endpoint = status === "in" ? "/attendance/punch-out" : "/attendance/punch-in";
-      const { data } = await api.post(endpoint);
+      const { data } = await api.post("/attendance/punch-in");
       setAttendance(data.attendance);
     } catch (error) {
       setRequestError(error.response?.data?.error || "Unable to update attendance.");
@@ -357,6 +365,13 @@ export default function AttendanceDashboard() {
       setAttendance(data.attendance);
     } finally { setIsPunching(false); }
   }, [status]);
+
+  const confirmPunchOut = useCallback(async () => {
+    setIsPunching(true); setRequestError("");
+    try { const { data } = await api.post("/attendance/punch-out"); setAttendance(data.attendance); setPunchOutPreview(null); refreshAttendance(); }
+    catch (error) { setRequestError(error.response?.data?.error || "Unable to punch out."); }
+    finally { setIsPunching(false); }
+  }, [refreshAttendance]);
 
   const weekData = summary?.week || [];
   const weekTotal = weekData.reduce((sum, d) => sum + d.hours, 0);
@@ -378,6 +393,13 @@ export default function AttendanceDashboard() {
       `}</style>
 
       <div className="mx-auto max-w-6xl font-body">
+        {punchOutPreview && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="punch-out-title">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4"><div><h2 id="punch-out-title" className="text-lg font-semibold text-slate-900">Confirm punch out</h2><p className="mt-1 text-sm text-slate-500">Your attendance will be finalized for today.</p></div><button onClick={() => setPunchOutPreview(null)} aria-label="Cancel punch out" className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"><X size={19}/></button></div>
+            <div className="mt-5 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Worked time</p><p className="mt-1 font-mono font-semibold">{fmtDuration(punchOutPreview.projectedSeconds)}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Final status</p><p className="mt-1 font-semibold text-slate-800">{punchOutPreview.status}</p></div></div>
+            {punchOutPreview.status === "Absent" && <div className="mt-4 flex gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"><AlertTriangle className="mt-0.5 shrink-0" size={18}/><p><strong>Punching out now will mark today as Absent.</strong> You have not reached the configured half-day minimum.</p></div>}
+            <div className="mt-6 flex justify-end gap-3"><button onClick={() => setPunchOutPreview(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">Cancel</button><button disabled={isPunching} onClick={confirmPunchOut} className="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{isPunching ? "Punching out..." : "Confirm punch out"}</button></div>
+          </div></div>}
         {/* header — identity strip, not a navbar */}
         <header className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3">

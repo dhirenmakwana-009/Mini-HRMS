@@ -5,6 +5,12 @@ const attendanceSchema = new mongoose.Schema({
 	user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 	date: { type: String, required: true },
 	status: { type: String, enum: ["not_started", "working", "completed"], default: "not_started" },
+	attendanceStatus: { type: String, enum: ["in_progress", "present", "half_day", "absent"], default: "in_progress" },
+	isLate: { type: Boolean, default: false },
+	policySnapshot: {
+		timezone: String, workingDays: [Number], defaultShiftStart: String, defaultShiftEnd: String,
+		lateGraceMinutes: Number, fullDayHours: Number, halfDayHours: Number, attendanceMode: String,
+	},
 	firstPunchIn: Date,
 	lastPunchOut: Date,
 	totalWorkedSeconds: { type: Number, default: 0, min: 0 },

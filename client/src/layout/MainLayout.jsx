@@ -9,7 +9,7 @@ export const MainLayout = () => {
     const [mobileOpen, setMobileOpen] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
-    const activeItemId = location.pathname.split('/')[1] || "/";
+    const activeItemId = location.pathname;
     const { user, logout } = useAuth();
 
     return (    
@@ -27,8 +27,9 @@ export const MainLayout = () => {
             <main
                 className={`min-w-0 flex-1 overflow-y-auto p-3 sm:p-4 lg:p-5 transition-all duration-300 ease-in-out ${collapsed ? "lg:ml-[76px]" : "lg:ml-[240px]"
                     }`}
-            >   
-                <Outlet />
+            >
+                <button onClick={() => setMobileOpen(true)} aria-label="Open navigation" className="fixed left-3 top-3 z-30 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm lg:hidden"><span className="text-xl leading-none">☰</span></button>
+                <div className="pt-12 lg:pt-0"><Outlet /></div>
             </main>
         </div>
     )

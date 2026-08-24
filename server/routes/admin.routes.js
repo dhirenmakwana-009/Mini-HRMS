@@ -2,22 +2,47 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { User } from "../models/user.model.js";
 import { Attendance } from "../models/attendance.model.js";
+import { Organization } from "../models/organization.model.js";
 import { auth, requireRole } from "../middleware/auth.js";
+import { dateInTimezone, defaultPolicy, policyFor, publicStatus } from "../src/utils/attendance.js";
 
 const router = Router();
+router.use(auth, requireRole("admin"));
 
-router.get("/employees", auth, requireRole("admin"), async (req, res, next) => {
+router.get("/attendance-config", async (req, res, next) => {
+  try { const organization = await Organization.findById(req.user.organization).lean(); return res.json({ config: policyFor(organization) }); } catch (error) { return next(error); }
+});
+
+router.put("/attendance-config", async (req, res, next) => {
   try {
-    const employees = await User.find({ organization: req.user.organization, role: "employee" }).select("-password -refreshTokenHash").sort({ name: 1 }).lean();
-    const dates = employees.map((employee) => employee._id);
-    const today = new Date().toISOString().slice(0, 10);
-    const attendance = await Attendance.find({ organization: req.user.organization, user: { $in: dates }, date: today }).lean();
-    const byUser = new Map(attendance.map((record) => [record.user.toString(), record]));
-    return res.json({ employees: employees.map((employee) => publicEmployee(employee, byUser.get(employee._id.toString()))) });
+    const input = req.body || {}; const config = { ...defaultPolicy, ...input };
+    try { Intl.DateTimeFormat("en-US", { timeZone: config.timezone }); } catch { return res.status(400).json({ error: "Choose a valid IANA timezone" }); }
+    if (!Array.isArray(config.workingDays) || !config.workingDays.length || config.workingDays.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) return res.status(400).json({ error: "Choose at least one valid working day" });
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(config.defaultShiftStart) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(config.defaultShiftEnd)) return res.status(400).json({ error: "Shift times must use HH:MM" });
+    if (config.punchInRestriction === "shift_hours" && config.defaultShiftEnd <= config.defaultShiftStart) return res.status(400).json({ error: "Shift-only mode supports daytime shifts only; shift end must be after shift start" });
+    if (!Number.isFinite(Number(config.halfDayHours)) || !Number.isFinite(Number(config.fullDayHours)) || Number(config.halfDayHours) <= 0 || Number(config.fullDayHours) < Number(config.halfDayHours)) return res.status(400).json({ error: "Full-day hours must be greater than or equal to half-day hours" });
+    if (!Number.isFinite(Number(config.lateGraceMinutes)) || Number(config.lateGraceMinutes) < 0 || Number(config.lateGraceMinutes) > 240) return res.status(400).json({ error: "Late grace must be between 0 and 240 minutes" });
+    const organization = await Organization.findByIdAndUpdate(req.user.organization, { $set: { attendanceMode: config.attendanceMode === "single_session" ? "single_session" : "multiple_sessions", attendanceConfig: { timezone: config.timezone, workingDays: [...new Set(config.workingDays)].sort(), defaultShiftStart: config.defaultShiftStart, defaultShiftEnd: config.defaultShiftEnd, lateGraceMinutes: Number(config.lateGraceMinutes), fullDayHours: Number(config.fullDayHours), halfDayHours: Number(config.halfDayHours), punchInRestriction: config.punchInRestriction === "shift_hours" ? "shift_hours" : "anytime" } } }, { new: true }).lean();
+    return res.json({ config: policyFor(organization), message: "Attendance policy saved. It applies to future punch-ins only." });
   } catch (error) { return next(error); }
 });
 
-router.post("/employees", auth, requireRole("admin"), async (req, res, next) => {
+router.get("/employees", async (req, res, next) => {
+  try {
+    const [employees, organization] = await Promise.all([User.find({ organization: req.user.organization, role: "employee" }).select("-password -refreshTokenHash").sort({ name: 1 }).lean(), Organization.findById(req.user.organization).lean()]);
+    const dates = employees.map((employee) => employee._id);
+    const policy = policyFor(organization); const today = dateInTimezone(new Date(), policy.timezone);
+    const since = new Date(); since.setDate(since.getDate() - 29);
+    const attendance = await Attendance.find({ organization: req.user.organization, user: { $in: dates }, date: { $gte: dateInTimezone(since, policy.timezone), $lte: today } }).lean();
+    const byUser = new Map(attendance.map((record) => [record.user.toString(), record]));
+    const todayByUser = new Map(attendance.filter((r) => r.date === today).map((r) => [r.user.toString(), r]));
+    const metrics = employees.map((employee) => publicEmployee(employee, todayByUser.get(employee._id.toString()), attendance.filter((r) => r.user.toString() === employee._id.toString())));
+    const active = metrics.filter((e) => e.active), statuses = active.map((e) => e.todayStatus);
+    return res.json({ employees: metrics, kpis: { total: metrics.length, active: active.length, present: statuses.filter((s) => s === "Present").length, halfDay: statuses.filter((s) => s === "Half Day").length, late: active.filter((e) => e.isLate).length, absent: statuses.filter((s) => s === "Absent").length, rate: active.length ? Math.round(statuses.filter((s) => s === "Present" || s === "Late" || s === "Half Day").length / active.length * 100) : 0 } });
+  } catch (error) { return next(error); }
+});
+
+router.post("/employees", async (req, res, next) => {
   try {
     const {
       firstName, lastName, email, password, phone, department, designation,
@@ -58,7 +83,17 @@ router.post("/employees", auth, requireRole("admin"), async (req, res, next) => 
   } catch (error) { return next(error); }
 });
 
-function publicEmployee(user, attendance) {
+router.get("/employees/:id/attendance", async (req, res, next) => {
+  try {
+    const employee = await User.findOne({ _id: req.params.id, organization: req.user.organization, role: "employee" }).select("-password -refreshTokenHash").lean();
+    if (!employee) return res.status(404).json({ error: "Employee not found" });
+    const filter = { user: employee._id, organization: req.user.organization }; if (req.query.from || req.query.to) filter.date = { ...(req.query.from ? { $gte: req.query.from } : {}), ...(req.query.to ? { $lte: req.query.to } : {}) };
+    const records = await Attendance.find(filter).sort({ date: -1 }).lean(); const completed = records.filter((r) => r.status === "completed"), attended = completed.filter((r) => r.attendanceStatus !== "absent");
+    return res.json({ employee: publicEmployee(employee), records: records.map((r) => ({ ...r, statusLabel: publicStatus(r) })), summary: { totalDays: completed.length, present: completed.filter((r) => r.attendanceStatus === "present").length, halfDay: completed.filter((r) => r.attendanceStatus === "half_day").length, absent: completed.filter((r) => r.attendanceStatus === "absent").length, late: records.filter((r) => r.isLate).length, totalWorkedSeconds: records.reduce((sum, r) => sum + (r.totalWorkedSeconds || 0), 0), attendanceRate: completed.length ? Math.round(attended.length / completed.length * 100) : 0 } });
+  } catch (error) { return next(error); }
+});
+
+function publicEmployee(user, attendance, history = []) {
   const [firstName, ...lastParts] = user.name.split(" ");
   return {
     id: user._id,
@@ -73,9 +108,9 @@ function publicEmployee(user, attendance) {
     shiftStart: user.shiftStart,
     shiftEnd: user.shiftEnd,
     active: user.isActive,
-    todayStatus: attendance?.status === "working" ? "Present" : "Absent",
+    todayStatus: publicStatus(attendance), isLate: Boolean(attendance?.isLate),
     punchInTime: attendance?.firstPunchIn || null,
-    attendanceRate: null,
+    attendanceRate: history.filter((r) => r.status === "completed").length ? Math.round(history.filter((r) => r.status === "completed" && r.attendanceStatus !== "absent").length / history.filter((r) => r.status === "completed").length * 100) : 0,
   };
 }
 

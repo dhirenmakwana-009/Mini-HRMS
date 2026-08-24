@@ -195,7 +195,7 @@ export default function AttendanceHistory() {
     api.get("/attendance/history", { params: { from: toISO(range.start), to: toISO(range.end), limit: 100 } })
       .then(({ data }) => setServerRecords(data.records.map((record) => ({
         date: new Date(`${record.date}T00:00:00`),
-        status: record.status === "completed" ? "Present" : record.status === "working" ? "Late" : "Absent",
+        status: record.statusLabel || (record.status === "completed" ? "Present" : record.status === "working" ? "Late" : "Absent"),
         punchIn: record.firstPunchIn ? new Date(record.firstPunchIn) : null,
         punchOut: record.lastPunchOut ? new Date(record.lastPunchOut) : null,
         breakMins: 0,

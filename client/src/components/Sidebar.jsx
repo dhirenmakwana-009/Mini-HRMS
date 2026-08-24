@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
-import { History, LogOut, PanelLeftClose, ShieldCheck } from "lucide-react";
+import { History, LogOut, PanelLeftClose, ShieldCheck, Settings } from "lucide-react";
 
-const NAV_SECTIONS = [
+const EMPLOYEE_NAV = [
   {
     items: [
-      { id: "dashboard", label: "Dashboard", href: "/", icon: DashboardIcon },
-      { id: "attendanceHistory", label: "History", href: "/attendance-history", icon: History },
+      { id: "/", label: "Dashboard", href: "/", icon: DashboardIcon },
+      { id: "/attendance-history", label: "History", href: "/attendance-history", icon: History },
     ],
   },
   // {
@@ -13,6 +13,11 @@ const NAV_SECTIONS = [
   //   items: [{ id: "settings", label: "Settings", href: "/settings", icon: SettingsIcon }],
   // },
 ];
+const ADMIN_NAV = [{ items: [
+  { id: "/admin/dashboard", label: "Overview", href: "/admin/dashboard", icon: DashboardIcon },
+  { id: "/admin/attendance-history", label: "Attendance History", href: "/admin/attendance-history", icon: History },
+  { id: "/admin/attendance-config", label: "Attendance Settings", href: "/admin/attendance-config", icon: Settings },
+] }];
 
 export const Sidebar = ({
   collapsed = false,
@@ -26,6 +31,7 @@ export const Sidebar = ({
   onLogout,
 }) => {
   const drawerRef = useRef(null);
+  const navSections = user?.role === "admin" ? ADMIN_NAV : EMPLOYEE_NAV;
 
   // close the mobile drawer on Escape
   useEffect(() => {
@@ -69,8 +75,8 @@ export const Sidebar = ({
         {/* ---- Header: brand + collapse toggle (desktop) / close (mobile) ---- */}
         <div className="flex h-[76px] flex-shrink-0 items-center justify-between border-b border-white/[0.07] px-4">
           <div className={`flex items-center gap-3 overflow-hidden ${collapsed ? "lg:w-0 lg:opacity-0" : ""} transition-all duration-200`}>
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center object-cover rounded-xl border border-[#c9a877]/25 bg-[#c9a877]/10 shadow-inner shadow-[#c9a877]/10">
-              <img src="/image.png" alt="DM WebSoft" className="h-9 w-9 object-cover" />
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#c9a877]/25 bg-[#c9a877]/10 shadow-inner shadow-[#c9a877]/10">
+              <img src="/image.png" alt="DM WebSoft" className="h-full w-full object-cover" />
             </div>
             <div className="min-w-0">
               <span className="block truncate font-serif text-[15px] font-semibold tracking-wide text-stone-50">{orgName}</span>
@@ -80,8 +86,8 @@ export const Sidebar = ({
 
           {/* collapsed-state mini glyph, desktop only */}
           {collapsed && (
-            <div className="hidden h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-[#c9a877]/25 bg-[#c9a877]/10 lg:flex">
-              <img src="/image.png" alt="DM WebSoft" className="h-9 w-9 object-contain" />
+            <div className="hidden h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#c9a877]/25 bg-[#c9a877]/10 lg:flex">
+              <img src="/image.png" alt="DM WebSoft" className="h-full w-full object-cover" />
               {/* <BrandGlyph className="h-4.5 w-4.5 text-[#c9a877]" /> */}
             </div>
           )}
@@ -99,7 +105,7 @@ export const Sidebar = ({
         {/* ---- Nav items ---- */}
         <nav className="flex-1 overflow-y-auto px-3 py-6 [scrollbar-width:thin] [scrollbar-color:rgba(201,168,119,.25)_transparent]">
           <p className={`mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-stone-500 ${collapsed ? "lg:hidden" : ""}`}>Workspace</p>
-          {NAV_SECTIONS.map((section, sIdx) => (
+          {navSections.map((section, sIdx) => (
             <div key={sIdx} className={section.divider ? "mt-3 border-t border-white/[0.06] pt-3" : ""}>
               {section.items.map((item) => {
                 const isActive = item.id === activeItemId;
@@ -119,7 +125,7 @@ export const Sidebar = ({
                   >
                     {/* active indicator bar */}
                     {isActive && (
-                      <span className="absolute right-3 h-1.5 w-1.5 rounded-full bg-[#c9a877] shadow-[0_0_10px_#c9a877]" />
+                      <span className={`absolute right-3 h-1.5 w-1.5 rounded-full bg-[#c9a877] shadow-[0_0_10px_#c9a877] ${collapsed ? "lg:hidden" : ""}`} />
                     )}
                     <Icon className={`h-[18px] w-[18px] flex-shrink-0 ${isActive ? "text-[#c9a877]" : ""}`} />
                     <span className={`truncate transition-all duration-200 ${collapsed ? "lg:hidden" : ""}`}>

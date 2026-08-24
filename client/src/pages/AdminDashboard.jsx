@@ -51,6 +51,7 @@ const DEPT_ROLES = {
 const STATUS_META = {
     Present: { icon: CheckCircle2, color: "text-emerald-600 bg-emerald-50 ring-emerald-200", dot: "bg-emerald-500" },
     Late: { icon: Clock3, color: "text-amber-600 bg-amber-50 ring-amber-200", dot: "bg-amber-500" },
+    "Half Day": { icon: Clock3, color: "text-sky-600 bg-sky-50 ring-sky-200", dot: "bg-sky-500" },
     Absent: { icon: XCircle, color: "text-rose-600 bg-rose-50 ring-rose-200", dot: "bg-rose-500" },
     "On Leave": { icon: Umbrella, color: "text-violet-600 bg-violet-50 ring-violet-200", dot: "bg-violet-500" },
 };
@@ -411,6 +412,13 @@ function Field({ label, error, children }) {
 /* ------------------------------------------------------------------ */
 
 function EmployeeDrawer({ employee, onClose, onEdit, onToggleActive }) {
+    const [attendanceDetail, setAttendanceDetail] = useState(null);
+    useEffect(() => {
+        if (!employee?.id) return undefined;
+        setAttendanceDetail(null);
+        api.get(`/admin/employees/${employee.id}/attendance`).then(({ data }) => setAttendanceDetail(data)).catch(() => setAttendanceDetail({ error: true }));
+        return undefined;
+    }, [employee?.id]);
     if (!employee) return null;
     const meta = STATUS_META[employee.todayStatus];
     return (
@@ -446,6 +454,16 @@ function EmployeeDrawer({ employee, onClose, onEdit, onToggleActive }) {
                     <DetailRow icon={Clock3} label="Shift" value={`${formatShiftTime(employee.shiftStart)} – ${formatShiftTime(employee.shiftEnd)}`} mono />
                     <DetailRow icon={ShieldCheck} label="Employment Type" value={employee.employmentType} />
                     <DetailRow icon={MapPin} label="Status" value={employee.active ? "Active" : "Deactivated"} />
+                </div>
+
+                <div className="border-t border-slate-100 px-6 py-5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Attendance detail</p>
+                    {!attendanceDetail && <p className="mt-3 text-sm text-slate-400">Loading attendance...</p>}
+                    {attendanceDetail?.error && <p className="mt-3 text-sm text-rose-500">Unable to load attendance detail.</p>}
+                    {attendanceDetail?.summary && <>
+                        <div className="mt-3 grid grid-cols-3 gap-2 text-center"><div className="rounded-lg bg-emerald-50 p-2"><p className="text-lg font-semibold text-emerald-700">{attendanceDetail.summary.present}</p><p className="text-[10px] text-emerald-700">Present</p></div><div className="rounded-lg bg-sky-50 p-2"><p className="text-lg font-semibold text-sky-700">{attendanceDetail.summary.halfDay}</p><p className="text-[10px] text-sky-700">Half day</p></div><div className="rounded-lg bg-rose-50 p-2"><p className="text-lg font-semibold text-rose-700">{attendanceDetail.summary.absent}</p><p className="text-[10px] text-rose-700">Absent</p></div></div>
+                        <div className="mt-4 space-y-2">{attendanceDetail.records.slice(0, 8).map((record) => <div key={record._id} className="rounded-lg border border-slate-100 p-3 text-xs"><div className="flex justify-between font-medium text-slate-700"><span>{record.date}</span><span>{record.statusLabel}</span></div><p className="mt-1 text-slate-400">{record.logs?.map((log) => `${log.type === "punch_in" ? "In" : "Out"} ${new Date(log.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`).join(" · ") || "No punches"}</p></div>)}</div>
+                    </>}
                 </div>
 
                 <div className="mt-auto border-t border-slate-100 px-6 py-4">
@@ -502,6 +520,7 @@ export default function AdminDashboard() {
     const { logout } = useAuth();
     const navigate = useNavigate();
     const [employees, setEmployees] = useState([]);
+    const [serverKpis, setServerKpis] = useState(null);
     const [search, setSearch] = useState("");
     const [deptFilter, setDeptFilter] = useState("All");
     const [statusFilter, setStatusFilter] = useState("All");
@@ -520,14 +539,18 @@ export default function AdminDashboard() {
         return () => clearTimeout(t);
     }, [toast]);
 
-    useEffect(() => {
+    const refreshEmployees = React.useCallback(() => {
         api.get("/admin/employees")
-            .then(({ data }) => setEmployees(data.employees.map((employee) => ({
+            .then(({ data }) => {
+              setEmployees(data.employees.map((employee) => ({
                 ...employee,
                 joinDate: employee.joinDate ? new Date(employee.joinDate) : null,
-            }))))
+              })));
+              setServerKpis(data.kpis);
+            })
             .catch(() => setToast("Unable to load employees"));
     }, []);
+    useEffect(() => { refreshEmployees(); const id = setInterval(refreshEmployees, 60000); return () => clearInterval(id); }, [refreshEmployees]);
 
     const filtered = useMemo(() => {
         let rows = employees.filter((e) => {
@@ -560,8 +583,8 @@ export default function AdminDashboard() {
         const absent = active.filter((e) => e.todayStatus === "Absent").length;
         const leave = active.filter((e) => e.todayStatus === "On Leave").length;
         const rate = active.length ? (((present + late) / active.length) * 100).toFixed(0) : 0;
-        return { total: employees.length, active: active.length, present, late, absent, leave, rate };
-    }, [employees]);
+        return serverKpis || { total: employees.length, active: active.length, present, late, absent, leave, rate };
+    }, [employees, serverKpis]);
 
     const openAddModal = () => {
         setEditingEmployee(null);
@@ -669,7 +692,7 @@ export default function AdminDashboard() {
                     <StatCard icon={CheckCircle2} label="Present Today" value={kpis.present} accent="emerald" />
                     <StatCard icon={Clock3} label="Late Today" value={kpis.late} accent="amber" />
                     <StatCard icon={XCircle} label="Absent Today" value={kpis.absent} accent="rose" />
-                    <StatCard icon={Umbrella} label="On Leave" value={kpis.leave} accent="violet" />
+                    <StatCard icon={Clock3} label="Half Day" value={kpis.halfDay || 0} accent="sky" />
                     <StatCard icon={TrendingUp} label="Attendance Rate" value={`${kpis.rate}%`} accent="sky" />
                 </section>
 
