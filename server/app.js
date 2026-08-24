@@ -59,7 +59,13 @@ const corsOptions = {
 };
 
 app.use(helmet());
-app.use(cors(corsOptions));
+// app.use(cors(corsOptions));
+
+app.use(cors({
+  origin: 'https://minihrms01.vercel.app',
+  credentials: true // Include this if you pass cookies/sessions
+}));
+
 app.use(express.json({ limit: "100kb" }));
 app.use(cookieParser);
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false }));
