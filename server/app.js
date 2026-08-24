@@ -8,6 +8,7 @@ import { cookieParser } from "./middleware/cookies.js";
 import authRoutes from "./routes/auth.routes.js";
 import attendanceRoutes from "./routes/attendance.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import { ensureDefaultAdmin } from "./src/utils/ensureDefaultAdmin.js";
 
 const app = express();
 
@@ -47,8 +48,11 @@ app.use((error, _req, res, _next) => {
 
 const port = process.env.PORT || 3000;
 
-if (process.env.NODE_ENV !== "test") {
-  connectDb().then(() => app.listen(port, () => console.log(`Server is listening on port ${port}`))).catch((error) => {
+if (process.env.NODE_ENV !== "test" && !process.env.VERCEL) {
+  connectDb().then(() => ensureDefaultAdmin()).then((result) => {
+    console.log(`${result.created ? "Created" : "Found existing"} default admin ${result.email}`);
+    return app.listen(port, () => console.log(`Server is listening on port ${port}`));
+  }).catch((error) => {
     console.error("Database startup failed", error.message);
     process.exitCode = 1;
   });
